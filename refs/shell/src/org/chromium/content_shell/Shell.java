@@ -24,7 +24,7 @@ import org.chromium.base.JNINamespace;
 import org.chromium.content.browser.ContentView;
 import org.chromium.content.browser.ContentViewRenderView;
 import org.chromium.content.browser.LoadUrlParams;
-import org.chromium.ui.WindowAndroid;
+import org.chromium.ui.base.WindowAndroid;
 
 /**
  * Container for the various UI components that make up a shell window.
@@ -34,7 +34,7 @@ public class Shell extends LinearLayout {
 
     private static final long COMPLETED_PROGRESS_TIMEOUT_MS = 200;
 
-    private Runnable mClearProgressRunnable = new Runnable() {
+    private final Runnable mClearProgressRunnable = new Runnable() {
         @Override
         public void run() {
             //mProgressDrawable.setLevel(0);
@@ -48,8 +48,8 @@ public class Shell extends LinearLayout {
     private ImageButton mNextButton;
 
     private ClipDrawable mProgressDrawable;
-    */
-
+	*/
+    
     private ContentViewRenderView mContentViewRenderView;
     private WindowAndroid mWindow;
 
@@ -129,7 +129,8 @@ public class Shell extends LinearLayout {
                     mUrlTextView.setText(mContentView.getUrl());
                 }
             }
-        });*/
+        });
+        */
     }
 
     /**
@@ -142,7 +143,7 @@ public class Shell extends LinearLayout {
         if (url == null) return;
 
         if (TextUtils.equals(url, mContentView.getUrl())) {
-            mContentView.reload();
+            mContentView.getContentViewCore().reload(true);
         } else {
             mContentView.loadUrl(new LoadUrlParams(sanitizeUrl(url)));
         }
@@ -216,7 +217,7 @@ public class Shell extends LinearLayout {
      */
     @SuppressWarnings("unused")
     @CalledByNative
-    private void initFromNativeTabContents(int nativeTabContents) {
+    private void initFromNativeTabContents(long nativeTabContents) {
         mContentView = ContentView.newInstance(getContext(), nativeTabContents, mWindow);
         //if (mContentView.getUrl() != null) mUrlTextView.setText(mContentView.getUrl());
         ((FrameLayout) findViewById(R.id.contentview_holder)).addView(mContentView,
@@ -235,12 +236,12 @@ public class Shell extends LinearLayout {
     }
 
     private void setKeyboardVisibilityForUrl(boolean visible) {
-        /*InputMethodManager imm = (InputMethodManager) getContext().getSystemService(
+        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(
                 Context.INPUT_METHOD_SERVICE);
         if (visible) {
-            imm.showSoftInput(mUrlTextView, InputMethodManager.SHOW_IMPLICIT);
+            //imm.showSoftInput(mUrlTextView, InputMethodManager.SHOW_IMPLICIT);
         } else {
-            imm.hideSoftInputFromWindow(mUrlTextView.getWindowToken(), 0);
-        }*/
+            //imm.hideSoftInputFromWindow(mUrlTextView.getWindowToken(), 0);
+        }
     }
 }

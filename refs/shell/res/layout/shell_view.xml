@@ -12,8 +12,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical" >
-    <!--
-    <LinearLayout android:id="@+id/toolbar"
+<!--    <LinearLayout android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -41,8 +40,7 @@
             android:layout_height="38dp"
             android:src="@android:drawable/ic_media_next"
             android:scaleType="center" />
-    </LinearLayout>
-     -->
+    </LinearLayout>-->
     <FrameLayout android:id="@+id/contentview_holder"
         android:layout_width="match_parent"
         android:layout_height="0dp"

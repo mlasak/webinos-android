@@ -6,27 +6,21 @@ package org.chromium.content.browser.input;
 
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
-import android.app.TimePickerDialog;
 import android.app.DatePickerDialog.OnDateSetListener;
 import android.app.TimePickerDialog.OnTimeSetListener;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnDismissListener;
-import android.text.TextUtils;
 import android.text.format.DateFormat;
 import android.text.format.Time;
 import android.widget.DatePicker;
 import android.widget.TimePicker;
 
+import org.chromium.content.R;
 import org.chromium.content.browser.input.DateTimePickerDialog.OnDateTimeSetListener;
 import org.chromium.content.browser.input.MultiFieldTimePickerDialog.OnMultiFieldTimeSetListener;
-import org.chromium.content.browser.input.TwoFieldDatePickerDialog;
-import org.chromium.content.R;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Date;
 
 public class InputDialogContainer {
 
@@ -62,13 +56,13 @@ public class InputDialogContainer {
     private static int sTextInputTypeTime;
     private static int sTextInputTypeWeek;
 
-    private Context mContext;
+    private final Context mContext;
 
     // Prevents sending two notifications (from onClick and from onDismiss)
     private boolean mDialogAlreadyDismissed;
 
     private AlertDialog mDialog;
-    private InputActionDelegate mInputActionDelegate;
+    private final InputActionDelegate mInputActionDelegate;
 
     static void initializeInputTypes(int textInputTypeDate,
             int textInputTypeDateTime, int textInputTypeDateTimeLocal,
@@ -168,13 +162,7 @@ public class InputDialogContainer {
 
         mDialog.setButton(DialogInterface.BUTTON_NEGATIVE,
                 mContext.getText(android.R.string.cancel),
-                new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-                        mDialogAlreadyDismissed = true;
-                        mInputActionDelegate.cancelDateTimeDialog();
-                    }
-                });
+                (DialogInterface.OnClickListener) null);
 
         mDialog.setButton(DialogInterface.BUTTON_NEUTRAL,
                 mContext.getText(R.string.date_picker_dialog_clear),
@@ -183,6 +171,17 @@ public class InputDialogContainer {
                     public void onClick(DialogInterface dialog, int which) {
                         mDialogAlreadyDismissed = true;
                         mInputActionDelegate.replaceDateTime(dialogType, 0, 0, 0, 0, 0, 0, 0, 0);
+                    }
+                });
+
+        mDialog.setOnDismissListener(
+                new OnDismissListener() {
+                    @Override
+                    public void onDismiss(final DialogInterface dialog) {
+                        if (!mDialogAlreadyDismissed) {
+                            mDialogAlreadyDismissed = true;
+                            mInputActionDelegate.cancelDateTimeDialog();
+                        }
                     }
                 });
 
@@ -233,7 +232,7 @@ public class InputDialogContainer {
         }
     }
 
-  private class FullTimeListener implements OnMultiFieldTimeSetListener {
+    private class FullTimeListener implements OnMultiFieldTimeSetListener {
         private final int mDialogType;
         FullTimeListener(int dialogType) {
             mDialogType = dialogType;

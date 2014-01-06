@@ -8,14 +8,15 @@ import android.animation.TimeAnimator;
 import android.animation.TimeAnimator.TimeListener;
 import android.os.Build;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
-import android.view.MotionEvent.PointerProperties;
 import android.view.MotionEvent.PointerCoords;
+import android.view.MotionEvent.PointerProperties;
+import android.view.ViewConfiguration;
 
 import org.chromium.base.CalledByNative;
 import org.chromium.base.JNINamespace;
+import org.chromium.base.ThreadUtils;
 
 /**
  * Provides a Java-side implementation for simulating touch gestures,
@@ -25,18 +26,19 @@ import org.chromium.base.JNINamespace;
 public class GenericTouchGesture {
     private final ContentViewCore mContentViewCore;
 
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
+    private final Handler mHandler = new Handler(ThreadUtils.getUiThreadLooper());
 
     private TimeAnimator mTimeAnimator;
 
-    private int mNativePtr;
+    private long mNativePtr;
     private long mDownTime;
+    private long mStartTime;
 
-    private final byte STATE_INITIAL = 0;
-    private final byte STATE_MOVING = 1;
-    private final byte STATE_PENDING_UP = 2;
-    private final byte STATE_FINAL = 3;
-    private byte state = STATE_INITIAL;
+    private static final byte STATE_INITIAL = 0;
+    private static final byte STATE_MOVING = 1;
+    private static final byte STATE_PENDING_UP = 2;
+    private static final byte STATE_FINAL = 3;
+    private byte mState = STATE_INITIAL;
 
     private static class TouchPointer {
         private final float mStartX;
@@ -46,18 +48,32 @@ public class GenericTouchGesture {
         private final float mStepX;
         private final float mStepY;
 
-        private PointerProperties mProperties;
-        private PointerCoords mCoords;
+        private final PointerProperties mProperties;
+        private final PointerCoords mCoords;
 
 
         // Class representing a single pointer being moved over the screen.
         TouchPointer(int startX, int startY, int deltaX, int deltaY,
-                int id, float scale) {
+                int id, float scale, int scaledTouchSlop) {
             mStartX = startX * scale;
             mStartY = startY * scale;
 
-            mDeltaX = deltaX * scale;
-            mDeltaY = deltaY * scale;
+            float scaledDeltaX = deltaX * scale;
+            float scaledDeltaY = deltaY * scale;
+
+            if (scaledDeltaX != 0 || scaledDeltaY != 0) {
+                // The touch handler only considers a pointer as moving once
+                // it's been moved by more than scaledTouchSlop pixels. We
+                // thus increase the delta distance so the move is actually
+                // registered as covering the specified distance.
+                float distance = (float) Math.sqrt(scaledDeltaX * scaledDeltaX +
+                        scaledDeltaY * scaledDeltaY);
+                mDeltaX = scaledDeltaX * (1 + scaledTouchSlop / distance);
+                mDeltaY = scaledDeltaY * (1 + scaledTouchSlop / distance);
+            } else {
+                mDeltaX = scaledDeltaX;
+                mDeltaY = scaledDeltaY;
+            }
 
             if (deltaX != 0 || deltaY != 0) {
                 mStepX = mDeltaX / Math.abs(mDeltaX + mDeltaY);
@@ -104,7 +120,7 @@ public class GenericTouchGesture {
         }
     }
 
-    private TouchPointer[] mPointers;
+    private final TouchPointer[] mPointers;
     private final PointerProperties[] mPointerProperties;
     private final PointerCoords[] mPointerCoords;
 
@@ -114,9 +130,11 @@ public class GenericTouchGesture {
         mContentViewCore = contentViewCore;
 
         float scale = mContentViewCore.getRenderCoordinates().getDeviceScaleFactor();
+        int scaledTouchSlop = getScaledTouchSlop();
 
         mPointers = new TouchPointer[1];
-        mPointers[0] = new TouchPointer(startX, startY, deltaX, deltaY, 0, scale);
+        mPointers[0] = new TouchPointer(startX, startY, deltaX, deltaY, 0,
+            scale, scaledTouchSlop);
 
         mPointerProperties = new PointerProperties[1];
         mPointerProperties[0] = mPointers[0].getProperties();
@@ -131,10 +149,13 @@ public class GenericTouchGesture {
         mContentViewCore = contentViewCore;
 
         float scale = mContentViewCore.getRenderCoordinates().getDeviceScaleFactor();
+        int scaledTouchSlop = getScaledTouchSlop();
 
         mPointers = new TouchPointer[2];
-        mPointers[0] = new TouchPointer(startX0, startY0, deltaX0, deltaY0, 0, scale);
-        mPointers[1] = new TouchPointer(startX1, startY1, deltaX1, deltaY1, 1, scale);
+        mPointers[0] = new TouchPointer(startX0, startY0, deltaX0, deltaY0, 0,
+            scale, scaledTouchSlop);
+        mPointers[1] = new TouchPointer(startX1, startY1, deltaX1, deltaY1, 1,
+            scale, scaledTouchSlop);
 
         mPointerProperties = new PointerProperties[2];
         mPointerProperties[0] = mPointers[0].getProperties();
@@ -145,10 +166,15 @@ public class GenericTouchGesture {
         mPointerCoords[1] = mPointers[1].getCoords();
     }
 
+    private int getScaledTouchSlop() {
+        return ViewConfiguration.get(mContentViewCore.getContext()).getScaledTouchSlop();
+    }
+
     @CalledByNative
-    void start(int nativePtr) {
+    void start(long nativePtr) {
         assert mNativePtr == 0;
         mNativePtr = nativePtr;
+        mStartTime = SystemClock.uptimeMillis();
 
         Runnable runnable = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) ?
             createJBRunnable() : createPreJBRunnable();
@@ -156,9 +182,9 @@ public class GenericTouchGesture {
     }
 
     boolean sendEvent(long time) {
-        switch (state) {
+        switch (mState) {
             case STATE_INITIAL: {
-                mDownTime = SystemClock.uptimeMillis();
+                mDownTime = time;
 
                 // Touch the first pointer down. This initiates the gesture.
                 MotionEvent event = MotionEvent.obtain(mDownTime, time,
@@ -176,7 +202,7 @@ public class GenericTouchGesture {
                     mContentViewCore.onTouchEvent(event);
                     event.recycle();
                 }
-                state = STATE_MOVING;
+                mState = STATE_MOVING;
                 break;
             }
             case STATE_MOVING: {
@@ -184,7 +210,7 @@ public class GenericTouchGesture {
                     mNativePtr, mContentViewCore.getRenderCoordinates().getDeviceScaleFactor());
                 if (delta != 0) {
                     for (TouchPointer pointer : mPointers) {
-                        pointer.moveBy((float)delta);
+                        pointer.moveBy(delta);
                     }
                     MotionEvent event = MotionEvent.obtain(mDownTime, time,
                             MotionEvent.ACTION_MOVE,
@@ -194,7 +220,7 @@ public class GenericTouchGesture {
                     event.recycle();
                 }
                 if (havePointersArrived())
-                    state = STATE_PENDING_UP;
+                    mState = STATE_PENDING_UP;
                 break;
             }
             case STATE_PENDING_UP: {
@@ -216,11 +242,11 @@ public class GenericTouchGesture {
                 event.recycle();
 
                 nativeSetHasFinished(mNativePtr);
-                state = STATE_FINAL;
+                mState = STATE_FINAL;
                 break;
             }
         }
-        return state != STATE_FINAL;
+        return mState != STATE_FINAL;
     }
 
     private boolean havePointersArrived() {
@@ -241,7 +267,7 @@ public class GenericTouchGesture {
                     @Override
                     public void onTimeUpdate(TimeAnimator animation, long totalTime,
                             long deltaTime) {
-                        if (!sendEvent(mDownTime + totalTime)) {
+                        if (!sendEvent(mStartTime + totalTime)) {
                             mTimeAnimator.end();
                         }
                     }
@@ -264,6 +290,6 @@ public class GenericTouchGesture {
     }
 
     private native float nativeGetDelta(
-            int nativeGenericTouchGestureAndroid, float scale);
-    private native void nativeSetHasFinished(int nativeGenericTouchGestureAndroid);
+            long nativeGenericTouchGestureAndroid, float scale);
+    private native void nativeSetHasFinished(long nativeGenericTouchGestureAndroid);
 }

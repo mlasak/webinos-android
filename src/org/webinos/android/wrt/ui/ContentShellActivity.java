@@ -6,19 +6,15 @@ package org.webinos.android.wrt.ui;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
+import android.app.Activity;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.widget.Toast;
 
-import org.chromium.base.ChromiumActivity;
 import org.chromium.base.MemoryPressureListener;
 import org.chromium.content.app.LibraryLoader;
 import org.chromium.content.browser.ActivityContentVideoViewClient;
@@ -27,48 +23,27 @@ import org.chromium.content.browser.ContentVideoViewClient;
 import org.chromium.content.browser.ContentView;
 import org.chromium.content.browser.ContentViewClient;
 import org.chromium.content.browser.DeviceUtils;
-import org.chromium.content.browser.TracingIntentHandler;
 import org.chromium.content.common.CommandLine;
 import org.chromium.content.common.ProcessInitException;
 import org.chromium.content_shell.Shell;
 import org.chromium.content_shell.ShellManager;
-import org.chromium.ui.WindowAndroid;
+import org.chromium.ui.base.WindowAndroid;
 
 import org.webinos.android.R;
 
 /**
  * Activity for managing the Content Shell.
  */
-public class ContentShellActivity extends ChromiumActivity {
+public class ContentShellActivity extends Activity {
 
     public static final String COMMAND_LINE_FILE = "/data/local/tmp/content-shell-command-line";
     private static final String TAG = "ContentShellActivity";
 
     private static final String ACTIVE_SHELL_URL_KEY = "activeUrl";
-    private static final String ACTION_START_TRACE =
-            "org.chromium.content_shell.action.PROFILE_START";
-    private static final String ACTION_STOP_TRACE =
-            "org.chromium.content_shell.action.PROFILE_STOP";
     public static final String COMMAND_LINE_ARGS_KEY = "commandLineArgs";
-
-    /**
-     * Sending an intent with this action will simulate a memory pressure signal at a critical
-     * level.
-     */
-    private static final String ACTION_LOW_MEMORY =
-            "org.chromium.content_shell.action.ACTION_LOW_MEMORY";
-
-    /**
-     * Sending an intent with this action will simulate a memory pressure signal at a moderate
-     * level.
-     */
-    private static final String ACTION_TRIM_MEMORY_MODERATE =
-            "org.chromium.content_shell.action.ACTION_TRIM_MEMORY_MODERATE";
-
 
     private ShellManager mShellManager;
     private WindowAndroid mWindowAndroid;
-    private BroadcastReceiver mReceiver;
 
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
@@ -153,8 +128,9 @@ public class ContentShellActivity extends ChromiumActivity {
             Log.e(TAG, "Injection of webinos APIs failed.", e);
         }
 
-        getActiveContentView().getContentViewCore()
-            .evaluateJavaScript(((fileContent!=null)?fileContent.toString():""), null);
+        //FIXME: The evaluation of the injected script should be postponed until WebSocket communication is possible
+        //getActiveContentView().getContentViewCore()
+        //    .evaluateJavaScript(((fileContent!=null)?fileContent.toString():""), null);
 
 
         getActiveContentView().setContentViewClient(new ContentViewClient() {
@@ -196,11 +172,14 @@ public class ContentShellActivity extends ChromiumActivity {
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (keyCode != KeyEvent.KEYCODE_BACK) return super.onKeyUp(keyCode, event);
 
+        //Don't route the back event inside the shell?
+        /*
         Shell activeView = getActiveShell();
         if (activeView != null && activeView.getContentView().canGoBack()) {
             activeView.getContentView().goBack();
             return true;
         }
+        */
 
         return super.onKeyUp(keyCode, event);
     }
@@ -213,13 +192,7 @@ public class ContentShellActivity extends ChromiumActivity {
             Log.i(TAG, "Ignoring command line params: can only be set when creating the activity.");
         }
 
-        if (ACTION_LOW_MEMORY.equals(intent.getAction())) {
-            MemoryPressureListener.simulateMemoryPressureSignal(TRIM_MEMORY_COMPLETE);
-            return;
-        } else if (ACTION_TRIM_MEMORY_MODERATE.equals(intent.getAction())) {
-            MemoryPressureListener.simulateMemoryPressureSignal(TRIM_MEMORY_MODERATE);
-            return;
-        }
+        if (MemoryPressureListener.handleDebugIntent(this, intent.getAction())) return;
 
         String url = getUrlFromIntent(intent);
         if (!TextUtils.isEmpty(url)) {
@@ -229,48 +202,6 @@ public class ContentShellActivity extends ChromiumActivity {
                 activeView.loadUrl(url);
             }
         }
-    }
-
-    @Override
-    protected void onPause() {
-    	
-    	 Log.i(TAG, "onPause:");
-        ContentView view = getActiveContentView();
-        if (view != null) view.onActivityPause();
-
-        super.onPause();
-        unregisterReceiver(mReceiver);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        Log.i(TAG, "onResume:");
-        
-        ContentView view = getActiveContentView();
-        if (view != null) view.onActivityResume();
-        IntentFilter intentFilter = new IntentFilter(ACTION_START_TRACE);
-        intentFilter.addAction(ACTION_STOP_TRACE);
-        mReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                String action = intent.getAction();
-                String extra = intent.getStringExtra("file");
-                if (ACTION_START_TRACE.equals(action)) {
-                    if (extra.isEmpty()) {
-                        Log.e(TAG, "Can not start tracing without specifing saving location");
-                    } else {
-                        TracingIntentHandler.beginTracing(extra);
-                        Log.i(TAG, "start tracing");
-                    }
-                } else if (ACTION_STOP_TRACE.equals(action)) {
-                    Log.i(TAG, "stop tracing");
-                    TracingIntentHandler.endTracing();
-                }
-            }
-        };
-        registerReceiver(mReceiver, intentFilter);
     }
 
     @Override
