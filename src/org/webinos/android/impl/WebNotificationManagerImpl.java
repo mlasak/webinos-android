@@ -81,7 +81,7 @@ public class WebNotificationManagerImpl extends WebNotificationManager implement
         responseIntent.putExtra("id", id);
         PendingIntent pendingIntent = PendingIntent.getBroadcast(androidContext, 0, responseIntent, PendingIntent.FLAG_ONE_SHOT);
         int icon = R.drawable.icon;
-        Notification notification = new Notification(icon, "KATWARN WARNING", System.currentTimeMillis());
+        Notification notification = new Notification(icon, params[0], System.currentTimeMillis());
         notification.setLatestEventInfo(androidContext, params[0], params[1], pendingIntent);
         notification.flags = Notification.FLAG_AUTO_CANCEL;
         notification.defaults = Notification.DEFAULT_SOUND;
