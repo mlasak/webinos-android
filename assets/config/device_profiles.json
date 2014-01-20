@@ -15,7 +15,9 @@
     "webinos-api-payment": "git://github.com/webinos/webinos-api-payment.git",
     "webinos-api-tv": "git://github.com/webinos/webinos-api-tv.git",
     "webinos-api-iot": "git://github.com/webinos/webinos-api-iot.git",
-    "webinos-api-webNotification": "git://github.com/webinos/webinos-api-webNotification.git"
+    "webinos-api-webNotification": "git://github.com/webinos/webinos-api-webNotification.git",
+    "webinos-api-policy": "git://github.com/webinos/webinos-api-policy.git",
+    "webinos-api-db": "git://github.com/webinos/webinos-api-db.git"
   },
   "noapi": {}
 }
